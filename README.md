@@ -25,11 +25,16 @@ a platform backend that conforms to `AppDriver`:
 
 | Repo | Platform | Backend |
 |---|---|---|
-| [`autopilot-macos`](https://github.com/jschwefel-CBB/autopilot-macos) | macOS | `MacOSDriver` (Accessibility API) |
+| [`autopilot-macos`](https://github.com/jschwefel-CBB/autopilot-macos) | macOS | `MacOSDriver` — `AppDriver` over the Accessibility API, screen capture, vision matching |
 | [`autopilot-ios`](https://github.com/jschwefel-CBB/autopilot-ios) | iOS | XCUITest runner |
 | [`autopilot-android`](https://github.com/jschwefel-CBB/autopilot-android) | Android | UiAutomator2 runner |
 
+> **Status:** `autopilot-core` is consumed as a package by the macOS backend on its `v2-core-wire` branch (verified); the macOS `main` currently bundles equivalent logic in a single package. The package dependency becomes the shipping arrangement at **v2.0.0**. The iOS and Android backends re-implement the same plan model/runner natively today and may consume this package in a future version.
+
 ## Adding as a dependency
+
+> **v2.0.0 is not yet tagged** — until it is, depend on a branch or revision
+> (e.g. `branch: "main"`) rather than the version below.
 
 ```swift
 .package(url: "https://github.com/jschwefel-CBB/autopilot-core", from: "2.0.0")
