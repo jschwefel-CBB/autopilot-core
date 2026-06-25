@@ -85,6 +85,12 @@ public struct PlanRunner {
         // Bring the app frontmost and wait until it is key, so the first
         // synthesized keystroke/click is not dropped on a not-yet-active window.
         _ = driver.activate(app, timeoutMs: timeoutMs, intervalMs: intervalMs)
+        // Settle after activation: NSRunningApplication.isActive can flip true
+        // before the window server has finished making the window key/front, so
+        // the very first synthesized actions can still drop. A short fixed pause
+        // after activate closes that gap (the polled activate only confirms the
+        // process is active, not that the window is ready to receive input).
+        clock.sleep(0.3)
 
         for step in plan.steps {
             let stepTimeout = step.timeoutMs ?? timeoutMs
