@@ -105,11 +105,19 @@ On iOS, the agent **returns `StepResult`/`Report` and never calls `XCTFail`**. A
 - **Android** — `androidTest` builds `AndroidAgent` + the Kotlin `PlanRunner`, runs the bundled plan, `assertTrue(report.failures.isEmpty())`.
 - **Regression gate (unchanged):** macOS 78/78, iOS 75 PASS + 3 SKIP, Android 75 PASS + 3 SKIP — already CI-enforced on all three (incl. the self-hosted macOS runner). Plus the new conformance tests.
 
+## Documentation (kept true at every step)
+
+User-facing docs (READMEs, `autopilot-macos/docs/AUTHORING.md`, `docs/MANUAL.md`) today describe the old per-platform "runner" model; none mention the agent architecture. They are updated **per platform, as each migration step lands** — never up front — so a doc never describes code that does not yet exist (the same "mark target vs shipped" discipline the v2 doc audit enforced). The **design spec is the implementing agent's source of truth**, not the old user docs.
+
+Note: not every "runner" mention is wrong. Core's orchestrator is and stays `PlanRunner`; those references are correct. Only the per-platform-backend sense of "runner" becomes "agent." Each step's doc edit must distinguish the two (inventory which mentions are `PlanRunner` vs platform-backend before editing).
+
 ## Migration order
 
-1. **iOS first** (lower risk — same language, real core). Build `IOSDriver`; collapse `AutoPilotRunner.swift` onto core's `PlanRunner`; rewire the test target; confirm 75+3.
-2. **Android second.** Stand up `:agent` (Kotlin `AppDriver` + `AndroidAgent` + `PlanRunner` port + aligned models); pure-UIAutomator; add conformance suite; confirm 75+3.
-3. **Cleanup.** Fix the stale `AppDriver.swift` "Appium" comment; update docs to the agent model and the "agent, not runner" naming.
+Each step's definition of done includes: code built, that platform's CI gate green, **and that platform's user-facing docs flipped to the agent model.**
+
+1. **iOS first** (lower risk — same language, real core). Build `IOSDriver`; collapse `AutoPilotRunner.swift` onto core's `PlanRunner`; rewire the test target; confirm 75+3; update iOS README to the agent model.
+2. **Android second.** Stand up `:agent` (Kotlin `AppDriver` + `AndroidAgent` + `PlanRunner` port + aligned models); pure-UIAutomator; add conformance suite; confirm 75+3; update Android README to the agent model.
+3. **Cleanup.** Fix the stale `AppDriver.swift` "Appium" comment; sweep core/macOS user-facing docs (README, AUTHORING, MANUAL) for the cross-platform agent model and the "agent, not runner" naming (preserving correct `PlanRunner` references).
 
 Each step ends green on its platform's existing CI gate; nothing merges broken.
 
