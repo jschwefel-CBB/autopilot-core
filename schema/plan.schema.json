@@ -1,0 +1,517 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/jschwefel-CBB/autopilot-macos/blob/main/schema/plan.schema.json",
+  "title": "AutoPilot Test Plan",
+  "description": "A declarative GUI test plan executed by AutoPilot. See docs/AUTHORING.md.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "name",
+    "target",
+    "steps"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.1"
+    },
+    "name": {
+      "type": "string"
+    },
+    "include": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Sub-plan files to prepend; resolved relative to THIS plan file."
+    },
+    "target": {
+      "$ref": "#/$defs/target"
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "retryIntervalMs": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/step"
+      }
+    }
+  },
+  "$defs": {
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bundleId": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "Path to a real .app bundle."
+        },
+        "launchArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "launchFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "attach": {
+          "type": "boolean",
+          "description": "When true, attach to the frontmost already-running instance instead of terminating and relaunching. The run fails immediately if no matching instance is running. Use for documentation-capture plans or any workflow where you have already navigated the app to the desired state and do not want AutoPilot to reset it. launchArgs and launchFiles are ignored when attach is true."
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "bundleId"
+          ]
+        },
+        {
+          "required": [
+            "path"
+          ]
+        }
+      ]
+    },
+    "selector": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "type": "string",
+          "description": "AX role, e.g. AXButton, AXTextArea."
+        },
+        "identifier": {
+          "type": "string",
+          "description": "AXIdentifier — the preferred locator."
+        },
+        "title": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Pick the nth match when ambiguous."
+        },
+        "within": {
+          "$ref": "#/$defs/selector",
+          "description": "Scope to inside this parent element."
+        },
+        "vision": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "image",
+            "confidence"
+          ],
+          "properties": {
+            "image": {
+              "type": "string"
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        }
+      }
+    },
+    "assertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "property",
+        "op"
+      ],
+      "properties": {
+        "property": {
+          "enum": [
+            "value",
+            "title",
+            "enabled",
+            "focused",
+            "position",
+            "size",
+            "marked",
+            "count"
+          ]
+        },
+        "op": {
+          "enum": [
+            "equals",
+            "notEquals",
+            "contains",
+            "matches",
+            "exists",
+            "notExists",
+            "greaterThan",
+            "lessThan"
+          ]
+        },
+        "expected": {
+          "type": "string"
+        }
+      }
+    },
+    "args": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "clear": {
+          "type": "boolean"
+        },
+        "commit": {
+          "type": "boolean"
+        },
+        "focus": {
+          "type": "boolean",
+          "description": "false = don't focus-click (already-focused fields)."
+        },
+        "keys": {
+          "type": "string",
+          "description": "Chord, e.g. cmd+s, cmd+,, cmd+plus."
+        },
+        "menuPath": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "to": {
+          "$ref": "#/$defs/selector"
+        },
+        "toFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "NOT supported via synthetic events."
+        },
+        "deltaX": {
+          "type": "integer"
+        },
+        "deltaY": {
+          "type": "integer"
+        },
+        "seconds": {
+          "type": "number"
+        },
+        "path": {
+          "type": "string",
+          "description": "screenshot: output PNG path. Optional — defaults to <step-id>.png inside the plan's artifacts directory."
+        },
+        "present": {
+          "type": "boolean"
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#?[0-9A-Fa-f]{6}$"
+        },
+        "tolerance": {
+          "type": "number"
+        },
+        "width": {
+          "type": "integer",
+          "description": "assertRegion/snapshot: region width in points. screenshot (absolute-region mode): region width — all four of atX/atY/width/height must be present; any missing field silently falls back to full-display capture."
+        },
+        "height": {
+          "type": "integer",
+          "description": "assertRegion/snapshot: region height in points. screenshot (absolute-region mode): region height — see width."
+        },
+        "mode": {
+          "enum": [
+            "average",
+            "dominant"
+          ]
+        },
+        "reference": {
+          "type": "string"
+        },
+        "maxDiff": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "offsetX": {
+          "type": "integer"
+        },
+        "offsetY": {
+          "type": "integer"
+        },
+        "atX": {
+          "type": "integer",
+          "description": "assertPixel: absolute sample-point X when no target. screenshot (absolute-region mode): region origin X — requires atY, width, height."
+        },
+        "atY": {
+          "type": "integer",
+          "description": "assertPixel: absolute sample-point Y when no target. screenshot (absolute-region mode): region origin Y — requires atX, width, height."
+        },
+        "padding": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Screen points of margin added around the AX element frame on all sides. Default 0 for the screenshot action; default 8 for captureTarget. Only applies to AX-resolved targets (vision-only matches are skipped)."
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "action",
+        "level"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "action": {
+          "enum": [
+            "launch",
+            "terminate",
+            "click",
+            "doubleClick",
+            "rightClick",
+            "press",
+            "menu",
+            "type",
+            "keyPress",
+            "setValue",
+            "scroll",
+            "drag",
+            "assertPixel",
+            "assertRegion",
+            "snapshot",
+            "waitFor",
+            "screenshot",
+            "assert",
+            "wait"
+          ]
+        },
+        "level": {
+          "type": "string",
+          "enum": [
+            "happyPath",
+            "integrationSuite",
+            "tryToBreakIt"
+          ],
+          "description": "REQUIRED coverage tier for this step, forming a cumulative hierarchy: happyPath ⊂ integrationSuite ⊂ tryToBreakIt. A run AT a level executes that level and every level below it, so each test case is written once and reused by higher tiers. This is a coverage LABEL — it does NOT invert pass/fail; a tryToBreakIt step still passes by asserting the app refused correctly. happyPath = the expected flow works (\"does it do what I want?\"). integrationSuite = features working together, broader functional coverage. tryToBreakIt = adversarial/boundary input; assert graceful refusal."
+        },
+        "target": {
+          "$ref": "#/$defs/selector"
+        },
+        "args": {
+          "$ref": "#/$defs/args"
+        },
+        "assert": {
+          "$ref": "#/$defs/assertion"
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "captureTarget": {
+          "type": "boolean",
+          "description": "When true, AutoPilot saves a cropped PNG of the step's target element as <step-id>-target.png in the artifacts dir on EVERY run (pass or fail). Only works for AX-resolved targets (vision-only matches are skipped silently). Requires Screen Recording permission; if missing, the crop is silently skipped and the step otherwise runs normally. Default padding is 8 screen points (override with args.padding). PlanLinter warns if set on a step with no target selector."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "click",
+                  "doubleClick",
+                  "rightClick",
+                  "press",
+                  "type",
+                  "keyPress",
+                  "setValue",
+                  "scroll",
+                  "drag",
+                  "waitFor",
+                  "assert"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "target"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "type"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "args": {
+                "required": [
+                  "text"
+                ]
+              }
+            },
+            "required": [
+              "args"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "setValue"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "args": {
+                "required": [
+                  "text"
+                ]
+              }
+            },
+            "required": [
+              "args"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "keyPress"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "args": {
+                "required": [
+                  "keys"
+                ]
+              }
+            },
+            "required": [
+              "args"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "menu"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "args": {
+                "required": [
+                  "menuPath"
+                ]
+              }
+            },
+            "required": [
+              "args"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "assert"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "assert"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "snapshot"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "args": {
+                "required": [
+                  "reference"
+                ]
+              }
+            },
+            "required": [
+              "args"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "assertPixel",
+                  "assertRegion"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "args": {
+                "required": [
+                  "color"
+                ]
+              }
+            },
+            "required": [
+              "args"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

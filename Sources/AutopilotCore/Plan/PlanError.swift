@@ -15,7 +15,7 @@ public enum PlanError: Error, Equatable, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .unsupportedSchemaVersion(let v): return "Unsupported schemaVersion: \(v) (supported: 1.0)"
+        case .unsupportedSchemaVersion(let v): return "Unsupported schemaVersion: \(v) (supported: 1.1)"
         case .invalidTarget(let m): return "Invalid target: \(m)"
         case .duplicateStepId(let id): return "Duplicate step id: \(id)"
         case .missingTarget(let id, let a): return "Step \(id): action '\(a)' requires a target selector"

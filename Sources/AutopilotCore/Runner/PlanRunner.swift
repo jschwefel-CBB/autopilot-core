@@ -11,10 +11,15 @@ public struct RunOptions {
     /// Human-readable plan name, threaded into PNG tEXt metadata on failure shots.
     /// Set automatically by PlanRunner.run(_:options:) from plan.name.
     var planName: String = ""
+    /// Run only steps at this coverage tier and below (cumulative). When nil,
+    /// all steps run (equivalent to `.tryToBreakIt`). Steps above the cap are
+    /// recorded as `.skipped`. See `StepLevel`.
+    public var maxLevel: StepLevel?
     public init(keepGoing: Bool = false, artifactsDir: URL, planBaseDir: URL? = nil,
-                updateSnapshots: Bool = false) {
+                updateSnapshots: Bool = false, maxLevel: StepLevel? = nil) {
         self.keepGoing = keepGoing; self.artifactsDir = artifactsDir
         self.planBaseDir = planBaseDir; self.updateSnapshots = updateSnapshots
+        self.maxLevel = maxLevel
     }
 }
 
@@ -93,13 +98,21 @@ public struct PlanRunner {
         clock.sleep(0.3)
 
         for step in plan.steps {
+            // Cumulative level filter: when a maxLevel is set, steps above it are
+            // recorded as skipped (not run). A step at or below maxLevel runs.
+            if let cap = options.maxLevel, step.level > cap {
+                report.add(StepResult(id: step.id, result: .skipped, durationMs: 0,
+                                      level: step.level,
+                                      message: "skipped: level \(step.level.rawValue) > run level \(cap.rawValue)"))
+                continue
+            }
             let stepTimeout = step.timeoutMs ?? timeoutMs
             let start = clock.now()
             do {
                 let result = try runStep(step, app: app, timeoutMs: stepTimeout,
                                          intervalMs: intervalMs, options: options)
                 let dur = Int((clock.now() - start) * 1000)
-                var r = result; r.durationMs = dur
+                var r = result; r.durationMs = dur; r.level = step.level
                 // captureTarget: crop + save a screenshot of the step's target
                 // element on ANY outcome (pass or fail) when the author opts in.
                 if step.captureTarget == true, let t = step.target,
@@ -143,6 +156,7 @@ public struct PlanRunner {
                 // unsupported key) is an infrastructure ERROR.
                 let outcome: StepOutcome = (error is TargetingError) ? .fail : .error
                 report.add(StepResult(id: step.id, result: outcome, durationMs: dur,
+                                      level: step.level,
                                       message: String(describing: error),
                                       screenshot: shot, axDump: dump))
                 if !options.keepGoing { break }
