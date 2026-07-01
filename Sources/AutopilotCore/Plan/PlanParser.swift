@@ -1,7 +1,7 @@
 import Foundation
 
 public struct PlanParser {
-    public static let supportedSchemaVersion = "1.0"
+    public static let supportedSchemaVersion = "1.1"
     public static let maxIncludeDepth = 8
     public static let maxSteps = 1000
 
@@ -10,6 +10,12 @@ public struct PlanParser {
     /// Parse raw JSON into a validated Plan. `baseDirectory` is the directory
     /// the plan file lives in, used to resolve `include` paths (Task 4).
     public func parse(data: Data, baseDirectory: URL) throws -> Plan {
+        // Pre-flight the required per-step `level` field against the RAW JSON so a
+        // missing or misspelled value yields a friendly, step-scoped error (with
+        // the valid values) instead of the cryptic synthesized-Codable error —
+        // this output is read by humans AND by an AI coding agent that needs the
+        // valid-value list to self-correct.
+        try preflightStepLevels(data: data)
         let plan: Plan
         do {
             plan = try JSONDecoder().decode(Plan.self, from: data)
@@ -20,6 +26,32 @@ public struct PlanParser {
                                            stack: [], depth: 0)
         try validate(resolved)
         return resolved
+    }
+
+    /// The accepted `level` values, surfaced in error messages.
+    static let validLevelList = StepLevel.allCases.map(\.rawValue).joined(separator: ", ")
+
+    /// Inspect each step object in the raw JSON for a present, valid `level`.
+    /// Throws a friendly `PlanError.decode` on a missing or invalid value.
+    /// (A non-object `steps` array, or other structural problems, are left to
+    /// the typed decode to report.)
+    func preflightStepLevels(data: Data) throws {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let steps = root["steps"] as? [Any] else {
+            return  // structural issues are reported by the typed decode
+        }
+        for (i, raw) in steps.enumerated() {
+            guard let step = raw as? [String: Any] else { continue }
+            let id = (step["id"] as? String) ?? "#\(i)"
+            guard let level = step["level"] else {
+                throw PlanError.decode(
+                    "step \(id): missing required field `level` — use \(Self.validLevelList)")
+            }
+            guard let levelStr = level as? String, StepLevel(rawValue: levelStr) != nil else {
+                throw PlanError.decode(
+                    "step \(id): invalid level '\(level)' — use \(Self.validLevelList)")
+            }
+        }
     }
 
     /// Resolve `include` references by prepending included steps in order.

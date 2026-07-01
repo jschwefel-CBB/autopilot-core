@@ -20,13 +20,13 @@ import Foundation
     @Test func prependsIncludedSteps() throws {
         let dir = try tempDir()
         _ = try writePlan("""
-        {"schemaVersion":"1.0","name":"setup","target":{"bundleId":"a"},
-         "steps":[{"id":"launch","action":"launch"}]}
+        {"schemaVersion":"1.1","name":"setup","target":{"bundleId":"a"},
+         "steps":[{"id":"launch","level":"happyPath","action":"launch"}]}
         """, name: "setup.json", in: dir)
         let mainURL = try writePlan("""
-        {"schemaVersion":"1.0","name":"main","include":["setup.json"],
+        {"schemaVersion":"1.1","name":"main","include":["setup.json"],
          "target":{"bundleId":"a"},
-         "steps":[{"id":"shot","action":"screenshot"}]}
+         "steps":[{"id":"shot","level":"happyPath","action":"screenshot"}]}
         """, name: "main.json", in: dir)
 
         let data = try Data(contentsOf: mainURL)
@@ -38,12 +38,12 @@ import Foundation
     @Test func detectsCycle() throws {
         let dir = try tempDir()
         _ = try writePlan("""
-        {"schemaVersion":"1.0","name":"a","include":["b.json"],
-         "target":{"bundleId":"a"},"steps":[{"id":"a1","action":"screenshot"}]}
+        {"schemaVersion":"1.1","name":"a","include":["b.json"],
+         "target":{"bundleId":"a"},"steps":[{"id":"a1","level":"happyPath","action":"screenshot"}]}
         """, name: "a.json", in: dir)
         let bURL = try writePlan("""
-        {"schemaVersion":"1.0","name":"b","include":["a.json"],
-         "target":{"bundleId":"a"},"steps":[{"id":"b1","action":"screenshot"}]}
+        {"schemaVersion":"1.1","name":"b","include":["a.json"],
+         "target":{"bundleId":"a"},"steps":[{"id":"b1","level":"happyPath","action":"screenshot"}]}
         """, name: "b.json", in: dir)
         let data = try Data(contentsOf: bURL)
         #expect(throws: PlanError.self) {
@@ -54,8 +54,8 @@ import Foundation
     @Test func missingIncludeThrows() throws {
         let dir = try tempDir()
         let mainURL = try writePlan("""
-        {"schemaVersion":"1.0","name":"main","include":["nope.json"],
-         "target":{"bundleId":"a"},"steps":[{"id":"s","action":"screenshot"}]}
+        {"schemaVersion":"1.1","name":"main","include":["nope.json"],
+         "target":{"bundleId":"a"},"steps":[{"id":"s","level":"happyPath","action":"screenshot"}]}
         """, name: "main.json", in: dir)
         let data = try Data(contentsOf: mainURL)
         #expect(throws: PlanError.self) {

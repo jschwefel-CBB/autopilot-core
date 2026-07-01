@@ -6,19 +6,20 @@ import Foundation
     @Test func decodesMinimalPlan() throws {
         let json = """
         {
-          "schemaVersion": "1.0",
+          "schemaVersion": "1.1",
           "name": "smoke",
           "target": { "bundleId": "com.example.app" },
           "steps": [
-            { "id": "c1", "action": "click",
+            { "id": "c1", "level":"happyPath","action": "click",
               "target": { "role": "AXButton", "identifier": "ok" } }
           ]
         }
         """.data(using: .utf8)!
         let plan = try JSONDecoder().decode(Plan.self, from: json)
         #expect(plan.name == "smoke")
-        #expect(plan.schemaVersion == "1.0")
+        #expect(plan.schemaVersion == "1.1")
         #expect(plan.target.bundleId == "com.example.app")
+        #expect(plan.steps[0].level == .happyPath)
         #expect(plan.steps.count == 1)
         #expect(plan.steps[0].id == "c1")
         #expect(plan.steps[0].action == .click)
@@ -28,10 +29,10 @@ import Foundation
     @Test func decodesAttachMode() throws {
         let json = """
         {
-          "schemaVersion": "1.0",
+          "schemaVersion": "1.1",
           "name": "attach-test",
           "target": { "bundleId": "com.example.app", "attach": true },
-          "steps": [ { "id": "q", "action": "terminate" } ]
+          "steps": [ { "id": "q", "level":"happyPath","action": "terminate" } ]
         }
         """.data(using: .utf8)!
         let plan = try JSONDecoder().decode(Plan.self, from: json)
@@ -42,10 +43,10 @@ import Foundation
     @Test func attachDefaultsToNil() throws {
         let json = """
         {
-          "schemaVersion": "1.0",
+          "schemaVersion": "1.1",
           "name": "normal",
           "target": { "bundleId": "com.example.app" },
-          "steps": [ { "id": "q", "action": "terminate" } ]
+          "steps": [ { "id": "q", "level":"happyPath","action": "terminate" } ]
         }
         """.data(using: .utf8)!
         let plan = try JSONDecoder().decode(Plan.self, from: json)
@@ -65,7 +66,7 @@ import Foundation
 
     @Test func rejectsTargetWithNeitherBundleIdNorPath() throws {
         let json = """
-        {"schemaVersion":"1.0","name":"x","target":{},"steps":[]}
+        {"schemaVersion":"1.1","name":"x","target":{},"steps":[]}
         """.data(using: .utf8)!
         #expect(throws: PlanError.self) {
             _ = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
@@ -74,8 +75,8 @@ import Foundation
 
     @Test func rejectsDuplicateStepIds() throws {
         let json = """
-        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
-         "steps":[{"id":"s","action":"screenshot"},{"id":"s","action":"screenshot"}]}
+        {"schemaVersion":"1.1","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"s","level":"happyPath","action":"screenshot"},{"id":"s","level":"happyPath","action":"screenshot"}]}
         """.data(using: .utf8)!
         #expect(throws: PlanError.self) {
             _ = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
@@ -85,8 +86,8 @@ import Foundation
     @Test func rejectsActionRequiringTargetWithoutOne() throws {
         // click requires a target
         let json = """
-        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
-         "steps":[{"id":"s","action":"click"}]}
+        {"schemaVersion":"1.1","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"s","level":"happyPath","action":"click"}]}
         """.data(using: .utf8)!
         #expect(throws: PlanError.self) {
             _ = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
@@ -95,8 +96,8 @@ import Foundation
 
     @Test func acceptsValidPlan() throws {
         let json = """
-        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
-         "steps":[{"id":"s","action":"click","target":{"identifier":"ok"}}]}
+        {"schemaVersion":"1.1","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"s","level":"happyPath","action":"click","target":{"identifier":"ok"}}]}
         """.data(using: .utf8)!
         let plan = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
         #expect(plan.steps.count == 1)
@@ -104,8 +105,8 @@ import Foundation
 
     @Test func dragNeedsToOrToFiles() throws {
         let json = """
-        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
-         "steps":[{"id":"d","action":"drag","target":{"identifier":"src"}}]}
+        {"schemaVersion":"1.1","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"d","level":"happyPath","action":"drag","target":{"identifier":"src"}}]}
         """.data(using: .utf8)!
         #expect(throws: PlanError.self) {
             _ = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
@@ -114,8 +115,8 @@ import Foundation
 
     @Test func dragWithDestinationIsValid() throws {
         let json = """
-        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
-         "steps":[{"id":"d","action":"drag","target":{"identifier":"src"},
+        {"schemaVersion":"1.1","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"d","level":"happyPath","action":"drag","target":{"identifier":"src"},
                    "args":{"to":{"identifier":"dst"}}}]}
         """.data(using: .utf8)!
         let plan = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
@@ -124,8 +125,8 @@ import Foundation
 
     @Test func assertPixelNeedsColorAtParse() throws {
         let json = """
-        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
-         "steps":[{"id":"p","action":"assertPixel","args":{"atX":1,"atY":1}}]}
+        {"schemaVersion":"1.1","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"p","level":"happyPath","action":"assertPixel","args":{"atX":1,"atY":1}}]}
         """.data(using: .utf8)!
         #expect(throws: PlanError.self) {
             _ = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
@@ -134,8 +135,8 @@ import Foundation
 
     @Test func assertRegionNeedsColorAtParse() throws {
         let json = """
-        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
-         "steps":[{"id":"r","action":"assertRegion","args":{"atX":1,"atY":1,"width":4,"height":4}}]}
+        {"schemaVersion":"1.1","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"r","level":"happyPath","action":"assertRegion","args":{"atX":1,"atY":1,"width":4,"height":4}}]}
         """.data(using: .utf8)!
         #expect(throws: PlanError.self) {
             _ = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
@@ -144,8 +145,8 @@ import Foundation
 
     @Test func snapshotNeedsReferenceAtParse() throws {
         let json = """
-        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
-         "steps":[{"id":"s","action":"snapshot","args":{"atX":1,"atY":1}}]}
+        {"schemaVersion":"1.1","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"s","level":"happyPath","action":"snapshot","args":{"atX":1,"atY":1}}]}
         """.data(using: .utf8)!
         #expect(throws: PlanError.self) {
             _ = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
@@ -155,8 +156,8 @@ import Foundation
     @Test func labelAndPathSelectorsRejectedAtParse() throws {
         for field in ["\"label\":\"OK\"", "\"path\":[\"w[0]\"]"] {
             let json = """
-            {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
-             "steps":[{"id":"c","action":"click","target":{\(field)}}]}
+            {"schemaVersion":"1.1","name":"x","target":{"bundleId":"a"},
+             "steps":[{"id":"c","level":"happyPath","action":"click","target":{\(field)}}]}
             """.data(using: .utf8)!
             #expect(throws: PlanError.self) {
                 _ = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
@@ -166,8 +167,8 @@ import Foundation
 
     @Test func keyPressBadChordRejectedAtParse() throws {
         let json = """
-        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
-         "steps":[{"id":"k","action":"keyPress","target":{"identifier":"e"},"args":{"keys":"cmd+frobnicate"}}]}
+        {"schemaVersion":"1.1","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"k","level":"happyPath","action":"keyPress","target":{"identifier":"e"},"args":{"keys":"cmd+frobnicate"}}]}
         """.data(using: .utf8)!
         #expect(throws: PlanError.self) {
             _ = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
@@ -176,8 +177,8 @@ import Foundation
 
     @Test func scrollNeedsADelta() throws {
         let json = """
-        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
-         "steps":[{"id":"s","action":"scroll","target":{"identifier":"e"}}]}
+        {"schemaVersion":"1.1","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"s","level":"happyPath","action":"scroll","target":{"identifier":"e"}}]}
         """.data(using: .utf8)!
         #expect(throws: PlanError.self) {
             _ = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
@@ -186,8 +187,8 @@ import Foundation
 
     @Test func numericAssertNeedsNumericExpected() throws {
         let json = """
-        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
-         "steps":[{"id":"a","action":"assert","target":{"identifier":"e"},
+        {"schemaVersion":"1.1","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"a","level":"happyPath","action":"assert","target":{"identifier":"e"},
                    "assert":{"property":"value","op":"greaterThan","expected":"notanumber"}}]}
         """.data(using: .utf8)!
         #expect(throws: PlanError.self) {
@@ -197,8 +198,8 @@ import Foundation
 
     @Test func matchesAssertNeedsValidRegex() throws {
         let json = """
-        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
-         "steps":[{"id":"a","action":"assert","target":{"identifier":"e"},
+        {"schemaVersion":"1.1","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"a","level":"happyPath","action":"assert","target":{"identifier":"e"},
                    "assert":{"property":"value","op":"matches","expected":"[unterminated"}}]}
         """.data(using: .utf8)!
         #expect(throws: PlanError.self) {
@@ -208,12 +209,12 @@ import Foundation
 
     @Test func validAssertionsAndChordsParse() throws {
         let json = """
-        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
+        {"schemaVersion":"1.1","name":"x","target":{"bundleId":"a"},
          "steps":[
-           {"id":"k","action":"keyPress","target":{"identifier":"e"},"args":{"keys":"cmd+s"}},
-           {"id":"sc","action":"scroll","target":{"identifier":"e"},"args":{"deltaY":-100}},
-           {"id":"g","action":"assert","target":{"identifier":"e"},"assert":{"property":"value","op":"greaterThan","expected":"5"}},
-           {"id":"m","action":"assert","target":{"identifier":"e"},"assert":{"property":"value","op":"matches","expected":"\\\\d+"}}
+           {"id":"k","level":"happyPath","action":"keyPress","target":{"identifier":"e"},"args":{"keys":"cmd+s"}},
+           {"id":"sc","level":"happyPath","action":"scroll","target":{"identifier":"e"},"args":{"deltaY":-100}},
+           {"id":"g","level":"happyPath","action":"assert","target":{"identifier":"e"},"assert":{"property":"value","op":"greaterThan","expected":"5"}},
+           {"id":"m","level":"happyPath","action":"assert","target":{"identifier":"e"},"assert":{"property":"value","op":"matches","expected":"\\\\d+"}}
          ]}
         """.data(using: .utf8)!
         let plan = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
@@ -222,8 +223,8 @@ import Foundation
 
     @Test func menuNeedsMenuPath() throws {
         let json = """
-        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
-         "steps":[{"id":"m","action":"menu"}]}
+        {"schemaVersion":"1.1","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"m","level":"happyPath","action":"menu"}]}
         """.data(using: .utf8)!
         #expect(throws: PlanError.self) {
             _ = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
@@ -232,8 +233,8 @@ import Foundation
 
     @Test func selectorIndexAndWithinDecode() throws {
         let json = """
-        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
-         "steps":[{"id":"s","action":"click",
+        {"schemaVersion":"1.1","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"s","level":"happyPath","action":"click",
            "target":{"role":"AXButton","index":2,
                      "within":{"role":"AXRow","index":0}}}]}
         """.data(using: .utf8)!
@@ -247,8 +248,8 @@ import Foundation
     @Test func assertPixelWithColorAndPointIsValid() throws {
         // A complete assertPixel (color + absolute point) parses fine.
         let json = """
-        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
-         "steps":[{"id":"p","action":"assertPixel","args":{"atX":10,"atY":10,"color":"#FF0000"}}]}
+        {"schemaVersion":"1.1","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"p","level":"happyPath","action":"assertPixel","args":{"atX":10,"atY":10,"color":"#FF0000"}}]}
         """.data(using: .utf8)!
         let plan = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
         #expect(plan.steps[0].args?.color == "#FF0000")
@@ -257,14 +258,14 @@ import Foundation
     @Test func screenshotActionDecodesAllModes() throws {
         // Full display, element-scoped, absolute region, and captureTarget all parse.
         let json = """
-        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
+        {"schemaVersion":"1.1","name":"x","target":{"bundleId":"a"},
          "steps":[
-           {"id":"full","action":"screenshot"},
-           {"id":"el","action":"screenshot",
+           {"id":"full","level":"happyPath","action":"screenshot"},
+           {"id":"el","level":"happyPath","action":"screenshot",
             "target":{"identifier":"toolbar"},"args":{"padding":16}},
-           {"id":"region","action":"screenshot",
+           {"id":"region","level":"happyPath","action":"screenshot",
             "args":{"atX":0,"atY":0,"width":400,"height":50}},
-           {"id":"ct","action":"assert","target":{"identifier":"label"},
+           {"id":"ct","level":"happyPath","action":"assert","target":{"identifier":"label"},
             "assert":{"property":"value","op":"equals","expected":"OK"},
             "captureTarget":true,"args":{"padding":8}}
          ]}
@@ -283,7 +284,7 @@ import Foundation
 @Suite struct PlanLinterCaptureTargetTests {
     func plan(steps: [[String: Any]]) throws -> Plan {
         let obj: [String: Any] = [
-            "schemaVersion": "1.0", "name": "t",
+            "schemaVersion": "1.1", "name": "t",
             "target": ["bundleId": "a"],
             "steps": steps,
         ]
@@ -294,7 +295,7 @@ import Foundation
     @Test func captureTargetWithNoTargetIsWarning() throws {
         // captureTarget: true on a step with no target → linter warning
         let p = try plan(steps: [
-            ["id": "s", "action": "screenshot", "captureTarget": true]
+            ["id": "s", "level":"happyPath","action": "screenshot", "captureTarget": true]
         ])
         let findings = PlanLinter().lint(p)
         #expect(findings.contains { $0.stepId == "s" && $0.severity == .warning
@@ -304,7 +305,7 @@ import Foundation
     @Test func captureTargetWithTargetProducesNoWarning() throws {
         // captureTarget: true on a step WITH a target → no linter warning
         let p = try plan(steps: [
-            ["id": "a", "action": "assert",
+            ["id": "a", "level":"happyPath","action": "assert",
              "target": ["identifier": "btn"],
              "assert": ["property": "value", "op": "equals", "expected": "OK"],
              "captureTarget": true]

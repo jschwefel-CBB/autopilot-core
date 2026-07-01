@@ -31,6 +31,10 @@ public struct PlanDefaults: Codable, Equatable, Sendable {
 public struct Step: Codable, Equatable, Sendable {
     public var id: String
     public var action: Action
+    /// The coverage tier this step belongs to (see `StepLevel`). REQUIRED on
+    /// every step — a plan that omits it is rejected at parse time. Cumulative:
+    /// a run at a higher level also runs every lower-level step.
+    public var level: StepLevel
     public var target: Selector?
     public var args: ActionArgs?
     public var assert: Assertion?
@@ -40,12 +44,13 @@ public struct Step: Codable, Equatable, Sendable {
     /// A quick way to build a visual log without sprinkling explicit `screenshot`
     /// steps everywhere.
     public var captureTarget: Bool?
-    public init(id: String, action: Action, target: Selector? = nil,
-                args: ActionArgs? = nil, assert: Assertion? = nil,
-                timeoutMs: Int? = nil, captureTarget: Bool? = nil) {
-        self.id = id; self.action = action; self.target = target
-        self.args = args; self.assert = assert; self.timeoutMs = timeoutMs
-        self.captureTarget = captureTarget
+    public init(id: String, action: Action, level: StepLevel,
+                target: Selector? = nil, args: ActionArgs? = nil,
+                assert: Assertion? = nil, timeoutMs: Int? = nil,
+                captureTarget: Bool? = nil) {
+        self.id = id; self.action = action; self.level = level
+        self.target = target; self.args = args; self.assert = assert
+        self.timeoutMs = timeoutMs; self.captureTarget = captureTarget
     }
 }
 

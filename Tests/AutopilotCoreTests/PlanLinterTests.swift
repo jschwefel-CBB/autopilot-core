@@ -10,9 +10,9 @@ import Foundation
 
     @Test func flagsLabelAndPathSelectors() {
         let p = plan([
-            Step(id: "a", action: .click, target: Selector(label: "x")),
-            Step(id: "b", action: .click, target: Selector(path: ["w[0]"])),
-            Step(id: "z", action: .terminate),
+            Step(id: "a", action: .click, level: .happyPath, target: Selector(label: "x")),
+            Step(id: "b", action: .click, level: .happyPath, target: Selector(path: ["w[0]"])),
+            Step(id: "z", action: .terminate, level: .happyPath),
         ])
         let f = PlanLinter().lint(p)
         #expect(f.contains { $0.message.contains("`label`") && $0.stepId == "a" })
@@ -20,14 +20,14 @@ import Foundation
     }
 
     @Test func flagsMissingTerminate() {
-        let p = plan([Step(id: "a", action: .screenshot)])
+        let p = plan([Step(id: "a", action: .screenshot, level: .happyPath)])
         #expect(PlanLinter().lint(p).contains { $0.message.contains("terminate") })
     }
 
     @Test func flagsMissingWindowWait() {
         let p = plan([
-            Step(id: "click", action: .click, target: Selector(identifier: "ok")),
-            Step(id: "q", action: .terminate),
+            Step(id: "click", action: .click, level: .happyPath, target: Selector(identifier: "ok")),
+            Step(id: "q", action: .terminate, level: .happyPath),
         ])
         #expect(PlanLinter().lint(p).contains { $0.message.contains("waitFor") })
     }
@@ -35,9 +35,9 @@ import Foundation
     @Test func cleanPlanHasNoFindings() {
         let waitArgs = { var a = ActionArgs(); a.present = true; return a }()
         let p = plan([
-            Step(id: "w", action: .waitFor, target: Selector(role: "AXWindow"), args: waitArgs),
-            Step(id: "click", action: .click, target: Selector(identifier: "ok")),
-            Step(id: "q", action: .terminate),
+            Step(id: "w", action: .waitFor, level: .happyPath, target: Selector(role: "AXWindow"), args: waitArgs),
+            Step(id: "click", action: .click, level: .happyPath, target: Selector(identifier: "ok")),
+            Step(id: "q", action: .terminate, level: .happyPath),
         ])
         #expect(PlanLinter().lint(p).isEmpty)
     }
@@ -48,7 +48,7 @@ import Foundation
         Plan(schemaVersion: "1.0", name: "p",
              target: TargetApp(bundleId: "a", launchArgs: launchArgs,
                                launchFiles: launchFiles, attach: true),
-             steps: [Step(id: "q", action: .terminate)])
+             steps: [Step(id: "q", action: .terminate, level: .happyPath)])
     }
 
     @Test func attachWithLaunchArgsIsWarning() {
