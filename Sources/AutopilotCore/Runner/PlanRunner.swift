@@ -249,17 +249,19 @@ public struct PlanRunner {
             try driver.selectMenuPath(path, app: app)
             return StepResult(id: step.id, result: .pass, durationMs: 0)
         case .drag:
-            // File drag-and-drop (dragging external files onto a control) cannot
-            // be synthesized with mouse events — it requires a real NSPasteboard
-            // drag session the OS originates. Fail clearly rather than no-op.
-            if step.args?.toFiles != nil {
-                return StepResult(id: step.id, result: .error, durationMs: 0,
-                    message: "file drag-and-drop is not supported via synthesized events; " +
-                             "open files with target.launchFiles instead, or test the drop handler headlessly")
-            }
             let ref = try driver.resolve(step.target!, app: app,
                                          timeoutMs: timeoutMs, intervalMs: intervalMs,
                                          baseDir: options.planBaseDir)
+            // File drag-and-drop: AutoPilot originates a real cross-process drag
+            // session (the platform backend is the drag source), dropping the
+            // files onto the target element's point. See performFileDrag.
+            if let files = step.args?.toFiles {
+                guard let at = driver.point(for: ref) else {
+                    throw PlanError.decode("drag (toFiles) needs a resolvable target point")
+                }
+                try driver.performFileDrag(files: files, to: at)
+                return StepResult(id: step.id, result: .pass, durationMs: 0)
+            }
             guard let dest = step.args?.to else { throw PlanError.decode("drag needs args.to or args.toFiles") }
             let destRef = try driver.resolve(dest, app: app,
                                              timeoutMs: timeoutMs, intervalMs: intervalMs,
