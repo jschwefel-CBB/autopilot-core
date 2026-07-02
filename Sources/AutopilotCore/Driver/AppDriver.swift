@@ -58,6 +58,11 @@ public protocol AppDriver {
     /// Drag from one screen point to another (file-less; coordinate drag only).
     /// The runner resolves both endpoints to points, then calls this.
     func performDrag(from: Point, to: Point) throws
+    /// Perform a REAL cross-process file drop: drag `files` onto screen `point`.
+    /// The runner resolves the drop target to a point, then calls this. Platform
+    /// backends that cannot originate a drag session should throw. Currently only
+    /// the macOS backend implements it (iOS mirrors the schema; Android is Kotlin).
+    func performFileDrag(files: [String], to: Point) throws
     /// Select a menu-bar path (e.g. ["File", "Save As…"]) on the app.
     func selectMenuPath(_ path: [String], app: LaunchedHandle) throws
 

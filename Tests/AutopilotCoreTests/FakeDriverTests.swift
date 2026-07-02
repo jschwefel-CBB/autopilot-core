@@ -6,8 +6,15 @@ import Foundation
 /// if this compiles and runs with zero platform imports, the seam is clean.
 final class FakeElement: ElementHandle { let id: String; init(_ id: String) { self.id = id } }
 
+/// Reference sink so a value-type FakeDriver can record calls made to it.
+final class DriverCallLog {
+    var fileDragCalls: [(files: [String], to: Point)] = []
+}
+
 struct FakeDriver: AppDriver {
     var nodes: [[String: String]] = []
+    /// Optional call recorder — nil in tests that don't inspect calls.
+    var callLog: DriverCallLog? = nil
     func launch(_ target: TargetApp) throws -> LaunchedHandle { LaunchedHandle(pid: 1, appName: "Fake") }
     func attach(_ target: TargetApp) throws -> LaunchedHandle { LaunchedHandle(pid: 1, appName: "Fake") }
     func attach(pid: Int32) throws -> LaunchedHandle { LaunchedHandle(pid: pid, appName: "Fake") }
@@ -27,6 +34,7 @@ struct FakeDriver: AppDriver {
     func perform(action: Action, args: ActionArgs?, on element: ResolvedElement?) throws {}
     func point(for element: ResolvedElement) -> Point? { if case .point(let p) = element { return p }; return Point(x: 0, y: 0) }
     func performDrag(from: Point, to: Point) throws {}
+    func performFileDrag(files: [String], to: Point) throws { callLog?.fileDragCalls.append((files, to)) }
     func selectMenuPath(_ path: [String], app: LaunchedHandle) throws {}
     func readProperty(_ property: AssertProperty, of element: any ElementHandle) -> String? { "fake" }
     func captureElementScreenshot(_ element: any ElementHandle, to path: String, padding: Int, metadata: [String: String]) -> String? { nil }
