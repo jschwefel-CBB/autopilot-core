@@ -15,11 +15,16 @@ public struct RunOptions {
     /// all steps run (equivalent to `.tryToBreakIt`). Steps above the cap are
     /// recorded as `.skipped`. See `StepLevel`.
     public var maxLevel: StepLevel?
+    /// Optional passive observer for live per-step progress. Nil by default so
+    /// existing callers are unaffected. See `RunObserver`.
+    public var observer: RunObserver?
     public init(keepGoing: Bool = false, artifactsDir: URL, planBaseDir: URL? = nil,
-                updateSnapshots: Bool = false, maxLevel: StepLevel? = nil) {
+                updateSnapshots: Bool = false, maxLevel: StepLevel? = nil,
+                observer: RunObserver? = nil) {
         self.keepGoing = keepGoing; self.artifactsDir = artifactsDir
         self.planBaseDir = planBaseDir; self.updateSnapshots = updateSnapshots
         self.maxLevel = maxLevel
+        self.observer = observer
     }
 }
 
@@ -58,6 +63,7 @@ public struct PlanRunner {
         var options = callerOptions
         options.artifactsDir = callerOptions.artifactsDir.appendingPathComponent(Self.slug(plan.name))
         options.planName = plan.name
+        options.observer?.runWillStart(plan: plan)
 
         var report = Report(plan: plan.name)
         let hasAX = driver.hasAccessibility()
@@ -97,13 +103,17 @@ public struct PlanRunner {
         // process is active, not that the window is ready to receive input).
         clock.sleep(0.3)
 
-        for step in plan.steps {
+        let stepTotal = plan.steps.count
+        for (stepIndex, step) in plan.steps.enumerated() {
+            options.observer?.stepWillStart(step, index: stepIndex, of: stepTotal)
             // Cumulative level filter: when a maxLevel is set, steps above it are
             // recorded as skipped (not run). A step at or below maxLevel runs.
             if let cap = options.maxLevel, step.level > cap {
-                report.add(StepResult(id: step.id, result: .skipped, durationMs: 0,
-                                      level: step.level,
-                                      message: "skipped: level \(step.level.rawValue) > run level \(cap.rawValue)"))
+                let skipped = StepResult(id: step.id, result: .skipped, durationMs: 0,
+                                         level: step.level,
+                                         message: "skipped: level \(step.level.rawValue) > run level \(cap.rawValue)")
+                report.add(skipped)
+                options.observer?.stepDidFinish(skipped, index: stepIndex)
                 continue
             }
             let stepTimeout = step.timeoutMs ?? timeoutMs
@@ -130,6 +140,7 @@ public struct PlanRunner {
                     }
                 }
                 report.add(r)
+                options.observer?.stepDidFinish(r, index: stepIndex)
                 if r.result != .pass && !options.keepGoing { break }
             } catch {
                 let dur = Int((clock.now() - start) * 1000)
@@ -155,10 +166,12 @@ public struct PlanRunner {
                 // FAILURE. Everything else (launch failure, AX action failure,
                 // unsupported key) is an infrastructure ERROR.
                 let outcome: StepOutcome = (error is TargetingError) ? .fail : .error
-                report.add(StepResult(id: step.id, result: outcome, durationMs: dur,
-                                      level: step.level,
-                                      message: String(describing: error),
-                                      screenshot: shot, axDump: dump))
+                let errResult = StepResult(id: step.id, result: outcome, durationMs: dur,
+                                           level: step.level,
+                                           message: String(describing: error),
+                                           screenshot: shot, axDump: dump)
+                report.add(errResult)
+                options.observer?.stepDidFinish(errResult, index: stepIndex)
                 if !options.keepGoing { break }
             }
         }
@@ -173,6 +186,7 @@ public struct PlanRunner {
             FileHandle.standardError.write(Data(
                 "autopilot: failed to write report.json to \(options.artifactsDir.path): \(error)\n".utf8))
         }
+        options.observer?.runDidFinish(report)
         return report
     }
 
