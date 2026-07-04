@@ -27,6 +27,26 @@ public struct TreeSnapshot: Sendable {
     }
 }
 
+/// One item in a menu, as reported by `AppDriver.listMenu`. Neutral (no platform
+/// types) so authoring/discovery can inspect menu contents — INCLUDING disabled
+/// items, which `selectPath` cannot invoke but an author still needs to see.
+public struct MenuItemInfo: Sendable, Equatable {
+    public let title: String
+    /// Whether the item is enabled at menu-open time. A disabled item (e.g. a
+    /// command that needs a specific first-responder state) is listed but cannot
+    /// be invoked via the `menu` action.
+    public let enabled: Bool
+    /// Whether the item opens a submenu.
+    public let hasSubmenu: Bool
+    /// The AXMenuItemMarkChar (e.g. "✓") if the item is checked/marked, else nil —
+    /// so a toggle's state is observable from the discovery path.
+    public let markChar: String?
+    public init(title: String, enabled: Bool, hasSubmenu: Bool, markChar: String?) {
+        self.title = title; self.enabled = enabled
+        self.hasSubmenu = hasSubmenu; self.markChar = markChar
+    }
+}
+
 /// Everything PlanRunner needs from a platform. A backend (macOS AX, iOS
 /// XCUITest, Android via Appium) implements this; core orchestration depends
 /// only on this protocol and never on any platform API.
@@ -82,4 +102,21 @@ public protocol AppDriver {
     // Inspection
     func dumpTree(app: LaunchedHandle) -> TreeSnapshot
     func suggestSelectors(app: LaunchedHandle) -> [SelectorSuggester.Suggestion]
+    /// List the items of the menu reached by `path` (e.g. ["View"] for the View
+    /// menu, or ["Edit","Text"] for a submenu) — INCLUDING disabled items, so an
+    /// author can discover what a menu contains and which items are currently
+    /// invokable. Throws if the path doesn't resolve.
+    func listMenu(path: [String], app: LaunchedHandle) throws -> [MenuItemInfo]
+
+    // Clipboard
+    /// The system pasteboard's current text (nil if empty / non-text). Backs the
+    /// `clipboard` assert property so a plan can verify copy/paste side effects.
+    func readClipboard() -> String?
+}
+
+// Default implementations so a backend that predates these primitives (or a test
+// double) still conforms. A backend that supports the feature overrides them.
+public extension AppDriver {
+    func listMenu(path: [String], app: LaunchedHandle) throws -> [MenuItemInfo] { [] }
+    func readClipboard() -> String? { nil }
 }

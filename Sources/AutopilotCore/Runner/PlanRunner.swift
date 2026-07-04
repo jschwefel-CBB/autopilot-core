@@ -303,6 +303,17 @@ public struct PlanRunner {
             return StepResult(id: step.id, result: outcome.matched ? .pass : .fail, durationMs: 0,
                               expected: expected, actual: outcome.actual)
         }
+        // `clipboard` reads the system pasteboard — target-less. Polls like any
+        // other value assert (a copy may land a beat after the action that fired it).
+        if assertion.property == .clipboard {
+            let expected = assertion.expected ?? ""
+            let outcome = assertions.pollEvaluate(
+                op: assertion.op, expected: expected,
+                timeoutMs: timeoutMs, intervalMs: intervalMs, clock: clock
+            ) { driver.readClipboard() ?? "" }
+            return StepResult(id: step.id, result: outcome.matched ? .pass : .fail, durationMs: 0,
+                              expected: expected, actual: outcome.actual)
+        }
         guard case .element(let h) = try driver.resolve(step.target!, app: app,
                                                         timeoutMs: timeoutMs, intervalMs: intervalMs,
                                                         baseDir: options.planBaseDir) else {
