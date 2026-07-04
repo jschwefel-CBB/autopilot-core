@@ -226,8 +226,14 @@ public struct PlanRunner {
                 // Full display.
                 ok = driver.captureMainDisplay(to: path, metadata: meta)
             }
+            // Never fail silently: if the capture itself failed, always carry a
+            // reason. Screen Recording is the near-universal cause, so name it.
+            let failMessage: String? = ok ? fallbackMessage
+                : (fallbackMessage ?? (driver.hasScreenRecording()
+                    ? "screen capture failed (no image written to \(path))"
+                    : driver.screenRecordingInstructions()))
             return StepResult(id: step.id, result: ok ? .pass : .fail, durationMs: 0,
-                              message: fallbackMessage, screenshot: ok ? path : nil)
+                              message: failMessage, screenshot: ok ? path : nil)
         case .waitFor:
             let present = step.args?.present ?? true
             let ok = driver.waitForPresence(step.target!, present: present, app: app,
@@ -447,6 +453,17 @@ public struct PlanRunner {
         let maxDiff = args?.maxDiff ?? 0.02
         let w = args?.width ?? 64, h = args?.height ?? 32
 
+        // A specific diagnostic when a reference write/update fails. Screen
+        // Recording is already checked above, so the usual real cause is an
+        // unwritable destination directory — name it instead of a bare "failed".
+        func refWriteFailure(_ verb: String) -> String {
+            let dir = URL(fileURLWithPath: refPath).deletingLastPathComponent().path
+            let writable = FileManager.default.isWritableFile(atPath: dir)
+            let dirNote = writable ? "the directory is writable — the capture returned no image"
+                                   : "the directory is NOT writable: \(dir)"
+            return "failed to \(verb) reference at \(refPath) — \(dirNote)"
+        }
+
         let center: Point
         if let ax = step.target {
             let ref = try driver.resolve(ax, app: app, timeoutMs: timeoutMs,
@@ -475,13 +492,13 @@ public struct PlanRunner {
                 at: URL(fileURLWithPath: refPath).deletingLastPathComponent(), withIntermediateDirectories: true)
             let ok = driver.captureRegion(rect, to: refPath, metadata: [:])
             return StepResult(id: step.id, result: ok ? .pass : .error, durationMs: 0,
-                              message: ok ? "reference written: \(refPath)" : "failed to write reference")
+                              message: ok ? "reference written: \(refPath)" : refWriteFailure("write"))
         }
         // Updating: overwrite the reference and pass.
         if options.updateSnapshots {
             let ok = driver.captureRegion(rect, to: refPath, metadata: [:])
             return StepResult(id: step.id, result: ok ? .pass : .error, durationMs: 0,
-                              message: ok ? "reference updated: \(refPath)" : "failed to update reference")
+                              message: ok ? "reference updated: \(refPath)" : refWriteFailure("update"))
         }
 
         // Subsequent runs: capture live and diff against the reference.
