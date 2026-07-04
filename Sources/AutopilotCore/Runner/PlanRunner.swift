@@ -277,6 +277,8 @@ public struct PlanRunner {
             }
             try driver.performDrag(from: from, to: to)
             return StepResult(id: step.id, result: .pass, durationMs: 0)
+        case .exec:
+            return try runExec(step, timeoutMs: timeoutMs, options: options)
         case .click, .doubleClick, .rightClick, .press, .type, .keyPress, .setValue, .scroll:
             let ref = try driver.resolve(step.target!, app: app,
                                          timeoutMs: timeoutMs, intervalMs: intervalMs,
@@ -284,6 +286,44 @@ public struct PlanRunner {
             try driver.perform(action: step.action, args: step.args, on: ref)
             return StepResult(id: step.id, result: .pass, durationMs: 0)
         }
+    }
+
+    /// Run an `exec` step: run the command via the driver, then — only if the step
+    /// carries an assert — gate on stdout/stderr/exitCode. A bare exec is a
+    /// setup/teardown lever and always passes (the exit code is ignored). A launch
+    /// failure or timeout throws from `runProcess` and fails the step loudly.
+    private func runExec(_ step: Step, timeoutMs: Int, options: RunOptions) throws -> StepResult {
+        let result = try driver.runProcess(
+            command: step.args?.command, argv: step.args?.argv,
+            timeoutMs: timeoutMs, workingDir: options.planBaseDir?.path)
+
+        guard let assertion = step.assert else {
+            // Pure setup/teardown — exit ignored, always passes.
+            return StepResult(id: step.id, result: .pass, durationMs: 0)
+        }
+
+        let actual: String
+        switch assertion.property {
+        case .stdout: actual = result.stdout
+        case .stderr: actual = result.stderr
+        case .exitCode: actual = String(result.exitCode)
+        default:
+            return StepResult(id: step.id, result: .fail, durationMs: 0,
+                              message: "exec assert supports only stdout / stderr / exitCode (got \(assertion.property.rawValue))")
+        }
+        let expected = assertion.expected ?? ""
+        let matched = assertions.evaluate(op: assertion.op, actual: actual, expected: expected)
+        // A bounded snippet of the other streams aids debugging without dumping
+        // megabytes into the report.
+        let msg = matched ? nil
+            : "exec exit=\(result.exitCode); stdout=\(snippet(result.stdout)); stderr=\(snippet(result.stderr))"
+        return StepResult(id: step.id, result: matched ? .pass : .fail, durationMs: 0,
+                          expected: expected, actual: actual, message: msg)
+    }
+
+    /// Truncate a captured stream for the failure message (first 200 chars).
+    private func snippet(_ s: String) -> String {
+        s.count <= 200 ? s : String(s.prefix(200)) + "…(\(s.count) chars)"
     }
 
     private func runAssert(_ step: Step, app: LaunchedHandle,

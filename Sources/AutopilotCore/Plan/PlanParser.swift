@@ -177,6 +177,16 @@ public struct PlanParser {
             if step.target == nil && (step.args?.atX == nil || step.args?.atY == nil) {
                 throw PlanError.missingArgs(stepId: step.id, action: step.action.rawValue, field: "target or atX/atY")
             }
+        case .exec:
+            // Exactly one of command / argv. Both or neither is a plan error.
+            let hasCommand = step.args?.command != nil
+            let hasArgv = (step.args?.argv?.isEmpty == false)
+            if hasCommand == hasArgv {   // both true or both false
+                throw PlanError.missingArgs(stepId: step.id, action: step.action.rawValue,
+                                            field: "exactly one of command or argv")
+            }
+            // If the exec gates on its output, validate that assertion now.
+            if let a = step.assert { try validateAssertion(a, stepId: step.id) }
         default:
             break
         }

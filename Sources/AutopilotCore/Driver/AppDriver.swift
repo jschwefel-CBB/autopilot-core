@@ -9,6 +9,18 @@ public struct RGBColor: Equatable, Sendable {
     public init(r: Int, g: Int, b: Int) { self.r = r; self.g = g; self.b = b }
 }
 
+/// The result of running an `exec` step's command. Neutral (no platform types)
+/// so the runner can evaluate stdout/stderr/exitCode asserts without importing
+/// Foundation.Process.
+public struct ProcessResult: Sendable, Equatable {
+    public let stdout: String
+    public let stderr: String
+    public let exitCode: Int
+    public init(stdout: String, stderr: String, exitCode: Int) {
+        self.stdout = stdout; self.stderr = stderr; self.exitCode = exitCode
+    }
+}
+
 /// A launched/attached app, identified by pid + display name. Neutral
 /// replacement for the macOS-only LaunchedApp at the driver boundary.
 public struct LaunchedHandle: Sendable {
@@ -112,6 +124,15 @@ public protocol AppDriver {
     /// The system pasteboard's current text (nil if empty / non-text). Backs the
     /// `clipboard` assert property so a plan can verify copy/paste side effects.
     func readClipboard() -> String?
+
+    // Process execution (the `exec` step)
+    /// Run a command — EITHER `command` (shell string via /bin/sh -c) OR `argv`
+    /// (program + args, no shell) — and capture stdout/stderr/exitCode. Bounded by
+    /// `timeoutMs`: on expiry the process (group) is killed and this throws.
+    /// `workingDir` is the plan file's base directory (nil → inherit). Backends
+    /// that cannot run subprocesses throw via the default implementation.
+    func runProcess(command: String?, argv: [String]?, timeoutMs: Int,
+                    workingDir: String?) throws -> ProcessResult
 }
 
 // Default implementations so a backend that predates these primitives (or a test
@@ -119,4 +140,8 @@ public protocol AppDriver {
 public extension AppDriver {
     func listMenu(path: [String], app: LaunchedHandle) throws -> [MenuItemInfo] { [] }
     func readClipboard() -> String? { nil }
+    func runProcess(command: String?, argv: [String]?, timeoutMs: Int,
+                    workingDir: String?) throws -> ProcessResult {
+        throw PlanError.decode("exec is not supported on this platform")
+    }
 }
