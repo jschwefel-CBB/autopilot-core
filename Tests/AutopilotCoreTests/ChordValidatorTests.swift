@@ -10,6 +10,13 @@ import Testing
         try ChordValidator.validate("f5")
         try ChordValidator.validate("cmd+comma")
     }
+
+    @Test func acceptsInsertKey() throws {
+        // Insert/overwrite-mode key (and its AppKit `help` alias) — closes the
+        // "AP has no Insert key" gap for editor overwrite-mode plans.
+        try ChordValidator.validate("insert")
+        try ChordValidator.validate("help")
+    }
     @Test func rejectsUnknownModifier() {
         #expect(throws: (any Error).self) { try ChordValidator.validate("hyper+s") }
     }
