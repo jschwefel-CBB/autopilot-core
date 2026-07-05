@@ -13,6 +13,9 @@ public enum Action: String, Codable, Sendable {
     case snapshot       // capture a region; write a reference on first run, diff on later runs
     case waitFor, screenshot, assert
     case wait   // explicit, discouraged fixed delay
+    case exec   // run a shell command / argv; capture stdout/stderr/exitCode.
+                // Bare = setup/teardown (always passes); with an assert on
+                // stdout/stderr/exitCode, the assert gates the step.
 }
 
 /// Per-action arguments. Only the fields relevant to a given action are used.
@@ -47,5 +50,9 @@ public struct ActionArgs: Codable, Equatable, Sendable {
     /// screenshot / captureTarget: points of padding added around the element
     /// frame on all sides. Preserves shadow/context that a pixel-tight crop hides.
     public var padding: Double?
+    // exec: run EITHER a shell string (`command`, via /bin/sh -c) OR an argv
+    // array (`argv`, run directly, no shell). Exactly one is required.
+    public var command: String?
+    public var argv: [String]?
     public init() {}
 }

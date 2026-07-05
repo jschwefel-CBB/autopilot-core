@@ -9,6 +9,18 @@ public struct RGBColor: Equatable, Sendable {
     public init(r: Int, g: Int, b: Int) { self.r = r; self.g = g; self.b = b }
 }
 
+/// The result of running an `exec` step's command. Neutral (no platform types)
+/// so the runner can evaluate stdout/stderr/exitCode asserts without importing
+/// Foundation.Process.
+public struct ProcessResult: Sendable, Equatable {
+    public let stdout: String
+    public let stderr: String
+    public let exitCode: Int
+    public init(stdout: String, stderr: String, exitCode: Int) {
+        self.stdout = stdout; self.stderr = stderr; self.exitCode = exitCode
+    }
+}
+
 /// A launched/attached app, identified by pid + display name. Neutral
 /// replacement for the macOS-only LaunchedApp at the driver boundary.
 public struct LaunchedHandle: Sendable {
@@ -24,6 +36,26 @@ public struct TreeSnapshot: Sendable {
     public let truncated: Bool
     public init(nodes: [[String: String]], truncated: Bool) {
         self.nodes = nodes; self.truncated = truncated
+    }
+}
+
+/// One item in a menu, as reported by `AppDriver.listMenu`. Neutral (no platform
+/// types) so authoring/discovery can inspect menu contents — INCLUDING disabled
+/// items, which `selectPath` cannot invoke but an author still needs to see.
+public struct MenuItemInfo: Sendable, Equatable {
+    public let title: String
+    /// Whether the item is enabled at menu-open time. A disabled item (e.g. a
+    /// command that needs a specific first-responder state) is listed but cannot
+    /// be invoked via the `menu` action.
+    public let enabled: Bool
+    /// Whether the item opens a submenu.
+    public let hasSubmenu: Bool
+    /// The AXMenuItemMarkChar (e.g. "✓") if the item is checked/marked, else nil —
+    /// so a toggle's state is observable from the discovery path.
+    public let markChar: String?
+    public init(title: String, enabled: Bool, hasSubmenu: Bool, markChar: String?) {
+        self.title = title; self.enabled = enabled
+        self.hasSubmenu = hasSubmenu; self.markChar = markChar
     }
 }
 
@@ -82,4 +114,34 @@ public protocol AppDriver {
     // Inspection
     func dumpTree(app: LaunchedHandle) -> TreeSnapshot
     func suggestSelectors(app: LaunchedHandle) -> [SelectorSuggester.Suggestion]
+    /// List the items of the menu reached by `path` (e.g. ["View"] for the View
+    /// menu, or ["Edit","Text"] for a submenu) — INCLUDING disabled items, so an
+    /// author can discover what a menu contains and which items are currently
+    /// invokable. Throws if the path doesn't resolve.
+    func listMenu(path: [String], app: LaunchedHandle) throws -> [MenuItemInfo]
+
+    // Clipboard
+    /// The system pasteboard's current text (nil if empty / non-text). Backs the
+    /// `clipboard` assert property so a plan can verify copy/paste side effects.
+    func readClipboard() -> String?
+
+    // Process execution (the `exec` step)
+    /// Run a command — EITHER `command` (shell string via /bin/sh -c) OR `argv`
+    /// (program + args, no shell) — and capture stdout/stderr/exitCode. Bounded by
+    /// `timeoutMs`: on expiry the process (group) is killed and this throws.
+    /// `workingDir` is the plan file's base directory (nil → inherit). Backends
+    /// that cannot run subprocesses throw via the default implementation.
+    func runProcess(command: String?, argv: [String]?, timeoutMs: Int,
+                    workingDir: String?) throws -> ProcessResult
+}
+
+// Default implementations so a backend that predates these primitives (or a test
+// double) still conforms. A backend that supports the feature overrides them.
+public extension AppDriver {
+    func listMenu(path: [String], app: LaunchedHandle) throws -> [MenuItemInfo] { [] }
+    func readClipboard() -> String? { nil }
+    func runProcess(command: String?, argv: [String]?, timeoutMs: Int,
+                    workingDir: String?) throws -> ProcessResult {
+        throw PlanError.decode("exec is not supported on this platform")
+    }
 }

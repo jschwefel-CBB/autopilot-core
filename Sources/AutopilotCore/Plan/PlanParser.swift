@@ -118,7 +118,12 @@ public struct PlanParser {
 
     func validateStep(_ step: Step) throws {
         if Self.targetRequiringActions.contains(step.action), step.target == nil {
-            throw PlanError.missingTarget(stepId: step.id, action: step.action.rawValue)
+            // A `clipboard` assert reads the system pasteboard — it is inherently
+            // target-less, so it's exempt from the assert target requirement.
+            let isClipboardAssert = step.action == .assert && step.assert?.property == .clipboard
+            if !isClipboardAssert {
+                throw PlanError.missingTarget(stepId: step.id, action: step.action.rawValue)
+            }
         }
         // Reject non-functional selector fields as a HARD error (not just a lint
         // warning) — `label`/`path` never match anything, so a plan using them is
@@ -172,6 +177,16 @@ public struct PlanParser {
             if step.target == nil && (step.args?.atX == nil || step.args?.atY == nil) {
                 throw PlanError.missingArgs(stepId: step.id, action: step.action.rawValue, field: "target or atX/atY")
             }
+        case .exec:
+            // Exactly one of command / argv. Both or neither is a plan error.
+            let hasCommand = step.args?.command != nil
+            let hasArgv = (step.args?.argv?.isEmpty == false)
+            if hasCommand == hasArgv {   // both true or both false
+                throw PlanError.missingArgs(stepId: step.id, action: step.action.rawValue,
+                                            field: "exactly one of command or argv")
+            }
+            // If the exec gates on its output, validate that assertion now.
+            if let a = step.assert { try validateAssertion(a, stepId: step.id) }
         default:
             break
         }

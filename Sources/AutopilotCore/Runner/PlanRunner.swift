@@ -15,11 +15,16 @@ public struct RunOptions {
     /// all steps run (equivalent to `.tryToBreakIt`). Steps above the cap are
     /// recorded as `.skipped`. See `StepLevel`.
     public var maxLevel: StepLevel?
+    /// Optional passive observer for live per-step progress. Nil by default so
+    /// existing callers are unaffected. See `RunObserver`.
+    public var observer: RunObserver?
     public init(keepGoing: Bool = false, artifactsDir: URL, planBaseDir: URL? = nil,
-                updateSnapshots: Bool = false, maxLevel: StepLevel? = nil) {
+                updateSnapshots: Bool = false, maxLevel: StepLevel? = nil,
+                observer: RunObserver? = nil) {
         self.keepGoing = keepGoing; self.artifactsDir = artifactsDir
         self.planBaseDir = planBaseDir; self.updateSnapshots = updateSnapshots
         self.maxLevel = maxLevel
+        self.observer = observer
     }
 }
 
@@ -58,6 +63,7 @@ public struct PlanRunner {
         var options = callerOptions
         options.artifactsDir = callerOptions.artifactsDir.appendingPathComponent(Self.slug(plan.name))
         options.planName = plan.name
+        options.observer?.runWillStart(plan: plan)
 
         var report = Report(plan: plan.name)
         let hasAX = driver.hasAccessibility()
@@ -97,13 +103,17 @@ public struct PlanRunner {
         // process is active, not that the window is ready to receive input).
         clock.sleep(0.3)
 
-        for step in plan.steps {
+        let stepTotal = plan.steps.count
+        for (stepIndex, step) in plan.steps.enumerated() {
+            options.observer?.stepWillStart(step, index: stepIndex, of: stepTotal)
             // Cumulative level filter: when a maxLevel is set, steps above it are
             // recorded as skipped (not run). A step at or below maxLevel runs.
             if let cap = options.maxLevel, step.level > cap {
-                report.add(StepResult(id: step.id, result: .skipped, durationMs: 0,
-                                      level: step.level,
-                                      message: "skipped: level \(step.level.rawValue) > run level \(cap.rawValue)"))
+                let skipped = StepResult(id: step.id, result: .skipped, durationMs: 0,
+                                         level: step.level,
+                                         message: "skipped: level \(step.level.rawValue) > run level \(cap.rawValue)")
+                report.add(skipped)
+                options.observer?.stepDidFinish(skipped, index: stepIndex)
                 continue
             }
             let stepTimeout = step.timeoutMs ?? timeoutMs
@@ -130,6 +140,7 @@ public struct PlanRunner {
                     }
                 }
                 report.add(r)
+                options.observer?.stepDidFinish(r, index: stepIndex)
                 if r.result != .pass && !options.keepGoing { break }
             } catch {
                 let dur = Int((clock.now() - start) * 1000)
@@ -155,10 +166,12 @@ public struct PlanRunner {
                 // FAILURE. Everything else (launch failure, AX action failure,
                 // unsupported key) is an infrastructure ERROR.
                 let outcome: StepOutcome = (error is TargetingError) ? .fail : .error
-                report.add(StepResult(id: step.id, result: outcome, durationMs: dur,
-                                      level: step.level,
-                                      message: String(describing: error),
-                                      screenshot: shot, axDump: dump))
+                let errResult = StepResult(id: step.id, result: outcome, durationMs: dur,
+                                           level: step.level,
+                                           message: String(describing: error),
+                                           screenshot: shot, axDump: dump)
+                report.add(errResult)
+                options.observer?.stepDidFinish(errResult, index: stepIndex)
                 if !options.keepGoing { break }
             }
         }
@@ -173,6 +186,7 @@ public struct PlanRunner {
             FileHandle.standardError.write(Data(
                 "autopilot: failed to write report.json to \(options.artifactsDir.path): \(error)\n".utf8))
         }
+        options.observer?.runDidFinish(report)
         return report
     }
 
@@ -226,8 +240,14 @@ public struct PlanRunner {
                 // Full display.
                 ok = driver.captureMainDisplay(to: path, metadata: meta)
             }
+            // Never fail silently: if the capture itself failed, always carry a
+            // reason. Screen Recording is the near-universal cause, so name it.
+            let failMessage: String? = ok ? fallbackMessage
+                : (fallbackMessage ?? (driver.hasScreenRecording()
+                    ? "screen capture failed (no image written to \(path))"
+                    : driver.screenRecordingInstructions()))
             return StepResult(id: step.id, result: ok ? .pass : .fail, durationMs: 0,
-                              message: fallbackMessage, screenshot: ok ? path : nil)
+                              message: failMessage, screenshot: ok ? path : nil)
         case .waitFor:
             let present = step.args?.present ?? true
             let ok = driver.waitForPresence(step.target!, present: present, app: app,
@@ -271,6 +291,8 @@ public struct PlanRunner {
             }
             try driver.performDrag(from: from, to: to)
             return StepResult(id: step.id, result: .pass, durationMs: 0)
+        case .exec:
+            return try runExec(step, timeoutMs: timeoutMs, options: options)
         case .click, .doubleClick, .rightClick, .press, .type, .keyPress, .setValue, .scroll:
             let ref = try driver.resolve(step.target!, app: app,
                                          timeoutMs: timeoutMs, intervalMs: intervalMs,
@@ -278,6 +300,44 @@ public struct PlanRunner {
             try driver.perform(action: step.action, args: step.args, on: ref)
             return StepResult(id: step.id, result: .pass, durationMs: 0)
         }
+    }
+
+    /// Run an `exec` step: run the command via the driver, then — only if the step
+    /// carries an assert — gate on stdout/stderr/exitCode. A bare exec is a
+    /// setup/teardown lever and always passes (the exit code is ignored). A launch
+    /// failure or timeout throws from `runProcess` and fails the step loudly.
+    private func runExec(_ step: Step, timeoutMs: Int, options: RunOptions) throws -> StepResult {
+        let result = try driver.runProcess(
+            command: step.args?.command, argv: step.args?.argv,
+            timeoutMs: timeoutMs, workingDir: options.planBaseDir?.path)
+
+        guard let assertion = step.assert else {
+            // Pure setup/teardown — exit ignored, always passes.
+            return StepResult(id: step.id, result: .pass, durationMs: 0)
+        }
+
+        let actual: String
+        switch assertion.property {
+        case .stdout: actual = result.stdout
+        case .stderr: actual = result.stderr
+        case .exitCode: actual = String(result.exitCode)
+        default:
+            return StepResult(id: step.id, result: .fail, durationMs: 0,
+                              message: "exec assert supports only stdout / stderr / exitCode (got \(assertion.property.rawValue))")
+        }
+        let expected = assertion.expected ?? ""
+        let matched = assertions.evaluate(op: assertion.op, actual: actual, expected: expected)
+        // A bounded snippet of the other streams aids debugging without dumping
+        // megabytes into the report.
+        let msg = matched ? nil
+            : "exec exit=\(result.exitCode); stdout=\(snippet(result.stdout)); stderr=\(snippet(result.stderr))"
+        return StepResult(id: step.id, result: matched ? .pass : .fail, durationMs: 0,
+                          expected: expected, actual: actual, message: msg)
+    }
+
+    /// Truncate a captured stream for the failure message (first 200 chars).
+    private func snippet(_ s: String) -> String {
+        s.count <= 200 ? s : String(s.prefix(200)) + "…(\(s.count) chars)"
     }
 
     private func runAssert(_ step: Step, app: LaunchedHandle,
@@ -300,6 +360,17 @@ public struct PlanRunner {
                 op: assertion.op, expected: expected,
                 timeoutMs: timeoutMs, intervalMs: intervalMs, clock: clock
             ) { String(driver.matchCount(step.target!, app: app)) }
+            return StepResult(id: step.id, result: outcome.matched ? .pass : .fail, durationMs: 0,
+                              expected: expected, actual: outcome.actual)
+        }
+        // `clipboard` reads the system pasteboard — target-less. Polls like any
+        // other value assert (a copy may land a beat after the action that fired it).
+        if assertion.property == .clipboard {
+            let expected = assertion.expected ?? ""
+            let outcome = assertions.pollEvaluate(
+                op: assertion.op, expected: expected,
+                timeoutMs: timeoutMs, intervalMs: intervalMs, clock: clock
+            ) { driver.readClipboard() ?? "" }
             return StepResult(id: step.id, result: outcome.matched ? .pass : .fail, durationMs: 0,
                               expected: expected, actual: outcome.actual)
         }
@@ -436,6 +507,17 @@ public struct PlanRunner {
         let maxDiff = args?.maxDiff ?? 0.02
         let w = args?.width ?? 64, h = args?.height ?? 32
 
+        // A specific diagnostic when a reference write/update fails. Screen
+        // Recording is already checked above, so the usual real cause is an
+        // unwritable destination directory — name it instead of a bare "failed".
+        func refWriteFailure(_ verb: String) -> String {
+            let dir = URL(fileURLWithPath: refPath).deletingLastPathComponent().path
+            let writable = FileManager.default.isWritableFile(atPath: dir)
+            let dirNote = writable ? "the directory is writable — the capture returned no image"
+                                   : "the directory is NOT writable: \(dir)"
+            return "failed to \(verb) reference at \(refPath) — \(dirNote)"
+        }
+
         let center: Point
         if let ax = step.target {
             let ref = try driver.resolve(ax, app: app, timeoutMs: timeoutMs,
@@ -464,13 +546,13 @@ public struct PlanRunner {
                 at: URL(fileURLWithPath: refPath).deletingLastPathComponent(), withIntermediateDirectories: true)
             let ok = driver.captureRegion(rect, to: refPath, metadata: [:])
             return StepResult(id: step.id, result: ok ? .pass : .error, durationMs: 0,
-                              message: ok ? "reference written: \(refPath)" : "failed to write reference")
+                              message: ok ? "reference written: \(refPath)" : refWriteFailure("write"))
         }
         // Updating: overwrite the reference and pass.
         if options.updateSnapshots {
             let ok = driver.captureRegion(rect, to: refPath, metadata: [:])
             return StepResult(id: step.id, result: ok ? .pass : .error, durationMs: 0,
-                              message: ok ? "reference updated: \(refPath)" : "failed to update reference")
+                              message: ok ? "reference updated: \(refPath)" : refWriteFailure("update"))
         }
 
         // Subsequent runs: capture live and diff against the reference.

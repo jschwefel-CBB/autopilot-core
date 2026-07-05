@@ -14,6 +14,7 @@ public enum ChordValidator {
     /// Named keys ActionEngine maps.
     static let namedKeys: Set<String> = [
         "return","enter","tab","space","delete","forwarddelete","escape",
+        "insert","help",
         "left","right","down","up","home","end","pageup","pagedown",
         "comma","period","slash","semicolon","quote","leftbracket","rightbracket",
         "backslash","grave","minus","equal",

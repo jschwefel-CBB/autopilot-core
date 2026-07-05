@@ -231,6 +231,68 @@ import Foundation
         }
     }
 
+    @Test func execNeedsCommandOrArgv() throws {
+        // Neither command nor argv → rejected.
+        let json = """
+        {"schemaVersion":"1.1","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"e","level":"happyPath","action":"exec"}]}
+        """.data(using: .utf8)!
+        #expect(throws: PlanError.self) {
+            _ = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
+        }
+    }
+
+    @Test func execRejectsBothCommandAndArgv() throws {
+        // Both provided → rejected (exactly one).
+        let json = """
+        {"schemaVersion":"1.1","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"e","level":"happyPath","action":"exec",
+           "args":{"command":"echo hi","argv":["/bin/echo","hi"]}}]}
+        """.data(using: .utf8)!
+        #expect(throws: PlanError.self) {
+            _ = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
+        }
+    }
+
+    @Test func execWithCommandIsValidAndTargetless() throws {
+        // A bare exec with a command needs no target and parses clean.
+        let json = """
+        {"schemaVersion":"1.1","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"e","level":"happyPath","action":"exec",
+           "args":{"command":"echo hi"}}]}
+        """.data(using: .utf8)!
+        let plan = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
+        #expect(plan.steps[0].action == .exec)
+        #expect(plan.steps[0].args?.command == "echo hi")
+        #expect(plan.steps[0].target == nil)
+    }
+
+    @Test func execAssertOnStdoutIsTargetless() throws {
+        // stdout/stderr/exitCode asserts on an exec step need no target.
+        let json = """
+        {"schemaVersion":"1.1","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"e","level":"happyPath","action":"exec",
+           "args":{"argv":["/bin/cat","/tmp/x"]},
+           "assert":{"property":"stdout","op":"contains","expected":"hi"}}]}
+        """.data(using: .utf8)!
+        let plan = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
+        #expect(plan.steps[0].assert?.property == .stdout)
+        #expect(plan.steps[0].args?.argv == ["/bin/cat", "/tmp/x"])
+    }
+
+    @Test func stdoutAssertOnNonExecStepStillNeedsTarget() throws {
+        // stdout/stderr/exitCode only make sense on exec — on a plain assert step
+        // they still require a target (they'd never resolve otherwise).
+        let json = """
+        {"schemaVersion":"1.1","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"a","level":"happyPath","action":"assert",
+           "assert":{"property":"exitCode","op":"equals","expected":"0"}}]}
+        """.data(using: .utf8)!
+        #expect(throws: PlanError.self) {
+            _ = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
+        }
+    }
+
     @Test func selectorIndexAndWithinDecode() throws {
         let json = """
         {"schemaVersion":"1.1","name":"x","target":{"bundleId":"a"},

@@ -5,6 +5,15 @@ public enum AssertProperty: String, Codable, Sendable {
     case marked   // menu-item checkmark state: "true"/"false" from AXMenuItemMarkChar
     case count    // number of elements matching the selector (for collections);
                   // evaluated via the resolver's count, relaxing single-match rules
+    case clipboard // the system pasteboard's current text; target-less. Lets a plan
+                   // assert "copy X" put X on the clipboard, or that copying nothing
+                   // left it unchanged. Compared with equals/contains/matches.
+    // exec-scoped, target-less: read the process result of the exec step this
+    // assert is attached to. stdout/stderr use text ops; exitCode uses text +
+    // numeric ops (equals/greaterThan/lessThan).
+    case stdout
+    case stderr
+    case exitCode
 }
 
 public enum AssertOp: String, Codable, Sendable {
