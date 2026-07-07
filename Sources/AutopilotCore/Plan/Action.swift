@@ -74,4 +74,16 @@ public struct ActionArgs: Codable, Equatable, Sendable {
     /// pace: milliseconds to pause after each subsequent step in demo mode.
     public var stepDelayMs: Int?
     public init() {}
+
+    /// True when no field is set. Lets an authoring/serialization layer drop an
+    /// all-nil args block instead of emitting an empty `"args": {}`.
+    public var isEmpty: Bool {
+        text == nil && keys == nil && deltaX == nil && deltaY == nil && seconds == nil
+            && path == nil && present == nil && menuPath == nil && to == nil && toFiles == nil
+            && commit == nil && clear == nil && focus == nil && offsetX == nil && offsetY == nil
+            && atX == nil && atY == nil && color == nil && tolerance == nil && width == nil
+            && height == nil && mode == nil && reference == nil && maxDiff == nil && padding == nil
+            && command == nil && argv == nil && holdMs == nil && position == nil
+            && typeMsPerChar == nil && stepDelayMs == nil
+    }
 }
