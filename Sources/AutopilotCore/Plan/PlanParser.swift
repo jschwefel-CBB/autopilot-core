@@ -1,7 +1,12 @@
 import Foundation
 
 public struct PlanParser {
-    public static let supportedSchemaVersion = "1.1"
+    /// The current schema version. Emitted by authoring tools; the newest features
+    /// (demo steps) require it.
+    public static let supportedSchemaVersion = "1.2"
+    /// Every schema version this parser accepts. 1.1 is still accepted verbatim for
+    /// back-compat — a 1.1 plan uses no demo actions, so nothing else changes.
+    public static let acceptedSchemaVersions: Set<String> = ["1.1", "1.2"]
     public static let maxIncludeDepth = 8
     public static let maxSteps = 1000
 
@@ -91,7 +96,7 @@ public struct PlanParser {
     }
 
     func validate(_ plan: Plan) throws {
-        guard plan.schemaVersion == Self.supportedSchemaVersion else {
+        guard Self.acceptedSchemaVersions.contains(plan.schemaVersion) else {
             throw PlanError.unsupportedSchemaVersion(plan.schemaVersion)
         }
         if (plan.target.bundleId?.isEmpty ?? true) && (plan.target.path?.isEmpty ?? true) {
@@ -113,7 +118,7 @@ public struct PlanParser {
 
     private static let targetRequiringActions: Set<Action> = [
         .click, .doubleClick, .rightClick, .press, .type, .keyPress, .setValue,
-        .scroll, .waitFor, .assert
+        .scroll, .waitFor, .assert, .highlight
     ]
 
     func validateStep(_ step: Step) throws {
@@ -187,6 +192,15 @@ public struct PlanParser {
             }
             // If the exec gates on its output, validate that assertion now.
             if let a = step.assert { try validateAssertion(a, stepId: step.id) }
+        case .caption:
+            if step.args?.text == nil {
+                throw PlanError.missingArgs(stepId: step.id, action: step.action.rawValue, field: "text")
+            }
+        case .pace:
+            if step.args?.typeMsPerChar == nil && step.args?.stepDelayMs == nil {
+                throw PlanError.missingArgs(stepId: step.id, action: step.action.rawValue,
+                                            field: "typeMsPerChar or stepDelayMs")
+            }
         default:
             break
         }

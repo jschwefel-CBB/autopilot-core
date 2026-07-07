@@ -18,14 +18,26 @@ public struct RunOptions {
     /// Optional passive observer for live per-step progress. Nil by default so
     /// existing callers are unaffected. See `RunObserver`.
     public var observer: RunObserver?
+    /// Demo mode: render `highlight`/`caption` overlays, apply `pace` cadence
+    /// (per-char typing + post-step delays). OFF by default so a plain test run is
+    /// fast and deterministic — with demo off, the demo actions are passing no-ops.
+    public var demoMode: Bool
     public init(keepGoing: Bool = false, artifactsDir: URL, planBaseDir: URL? = nil,
                 updateSnapshots: Bool = false, maxLevel: StepLevel? = nil,
-                observer: RunObserver? = nil) {
+                observer: RunObserver? = nil, demoMode: Bool = false) {
         self.keepGoing = keepGoing; self.artifactsDir = artifactsDir
         self.planBaseDir = planBaseDir; self.updateSnapshots = updateSnapshots
         self.maxLevel = maxLevel
         self.observer = observer
+        self.demoMode = demoMode
     }
+}
+
+/// Mutable demo cadence set by `pace` and read by later steps in the same run.
+/// A reference type so it survives across the (value-type RunOptions) step loop.
+final class DemoCadence {
+    var typeMsPerChar: Int = 0
+    var stepDelayMs: Int = 0
 }
 
 public struct PlanRunner {
@@ -103,6 +115,9 @@ public struct PlanRunner {
         // process is active, not that the window is ready to receive input).
         clock.sleep(0.3)
 
+        // Demo cadence accumulates across steps as `pace` steps set it (demo mode only).
+        let cadence = DemoCadence()
+
         let stepTotal = plan.steps.count
         for (stepIndex, step) in plan.steps.enumerated() {
             options.observer?.stepWillStart(step, index: stepIndex, of: stepTotal)
@@ -120,7 +135,7 @@ public struct PlanRunner {
             let start = clock.now()
             do {
                 let result = try runStep(step, app: app, timeoutMs: stepTimeout,
-                                         intervalMs: intervalMs, options: options)
+                                         intervalMs: intervalMs, options: options, cadence: cadence)
                 let dur = Int((clock.now() - start) * 1000)
                 var r = result; r.durationMs = dur; r.level = step.level
                 // captureTarget: crop + save a screenshot of the step's target
@@ -141,6 +156,12 @@ public struct PlanRunner {
                 }
                 report.add(r)
                 options.observer?.stepDidFinish(r, index: stepIndex)
+                // Demo pacing: pause after each step so a screencast is watchable.
+                // `pace` itself is excluded (its own delay would double-count) and
+                // this never runs in a normal test (demoMode off ⇒ cadence stays 0).
+                if options.demoMode, step.action != .pace, cadence.stepDelayMs > 0 {
+                    clock.sleep(Double(cadence.stepDelayMs) / 1000.0)
+                }
                 if r.result != .pass && !options.keepGoing { break }
             } catch {
                 let dur = Int((clock.now() - start) * 1000)
@@ -191,7 +212,7 @@ public struct PlanRunner {
     }
 
     private func runStep(_ step: Step, app: LaunchedHandle, timeoutMs: Int, intervalMs: Int,
-                         options: RunOptions) throws -> StepResult {
+                         options: RunOptions, cadence: DemoCadence) throws -> StepResult {
         switch step.action {
         case .launch:
             return StepResult(id: step.id, result: .pass, durationMs: 0)
@@ -297,7 +318,47 @@ public struct PlanRunner {
             let ref = try driver.resolve(step.target!, app: app,
                                          timeoutMs: timeoutMs, intervalMs: intervalMs,
                                          baseDir: options.planBaseDir)
-            try driver.perform(action: step.action, args: step.args, on: ref)
+            var args = step.args
+            // Demo pacing: for a `type` step, inject the current per-char cadence so
+            // the driver types slowly enough to watch. Only when a `pace` set it and
+            // the step didn't already specify its own. Never touches a normal test run.
+            if options.demoMode, step.action == .type, cadence.typeMsPerChar > 0,
+               (args?.typeMsPerChar ?? 0) == 0 {
+                var a = args ?? ActionArgs()
+                a.typeMsPerChar = cadence.typeMsPerChar
+                args = a
+            }
+            try driver.perform(action: step.action, args: args, on: ref)
+            return StepResult(id: step.id, result: .pass, durationMs: 0)
+
+        // ── Demo actions (schema 1.2). Only render/pace in demo mode; otherwise
+        //    they are passing no-ops so a plan stays a clean, fast test. A backend
+        //    that can't render an overlay simply does nothing (skip-don't-branch);
+        //    the step still passes.
+        case .pace:
+            // Record cadence for the steps that follow. Harmless when demo is off
+            // (nothing reads it), so no demoMode guard is needed here.
+            if let t = step.args?.typeMsPerChar { cadence.typeMsPerChar = max(0, t) }
+            if let s = step.args?.stepDelayMs { cadence.stepDelayMs = max(0, s) }
+            return StepResult(id: step.id, result: .pass, durationMs: 0)
+        case .caption:
+            if options.demoMode {
+                driver.showCaption(step.args?.text ?? "",
+                                   position: step.args?.position ?? "bottom",
+                                   holdMs: step.args?.holdMs ?? 0)
+            }
+            return StepResult(id: step.id, result: .pass, durationMs: 0)
+        case .highlight:
+            if options.demoMode {
+                // Resolve the target and let the driver compute its real frame.
+                // A resolve failure must NOT fail the demo step (skip-don't-branch),
+                // so swallow it — the highlight is decorative.
+                if case .element(let h)? = try? driver.resolve(step.target!, app: app,
+                                                              timeoutMs: timeoutMs, intervalMs: intervalMs,
+                                                              baseDir: options.planBaseDir) {
+                    driver.showHighlight(h, holdMs: step.args?.holdMs ?? 0)
+                }
+            }
             return StepResult(id: step.id, result: .pass, durationMs: 0)
         }
     }

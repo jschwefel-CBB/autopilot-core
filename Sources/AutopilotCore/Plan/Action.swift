@@ -16,6 +16,15 @@ public enum Action: String, Codable, Sendable {
     case exec   // run a shell command / argv; capture stdout/stderr/exitCode.
                 // Bare = setup/teardown (always passes); with an assert on
                 // stdout/stderr/exitCode, the assert gates the step.
+    // Demo actions (schema 1.2). Present so ONE plan can double as a screencast
+    // script. They only render in demo mode (RunOptions.demoMode); in a normal
+    // test run they are passing no-ops so the plan stays a clean, fast test.
+    // Backends that cannot render an overlay skip highlight/caption
+    // (skip-don't-branch), like the visual asserts on mobile.
+    case highlight  // draw a glow/ring on the target for holdMs, then clear.
+    case caption    // show on-screen narration text (args.text) for holdMs.
+    case pace       // set demo cadence (typeMsPerChar / stepDelayMs) for the steps
+                    // that follow, until the next pace. Stateful; no-op when not in demo mode.
 }
 
 /// Per-action arguments. Only the fields relevant to a given action are used.
@@ -54,5 +63,15 @@ public struct ActionArgs: Codable, Equatable, Sendable {
     // array (`argv`, run directly, no shell). Exactly one is required.
     public var command: String?
     public var argv: [String]?
+    // Demo actions (schema 1.2):
+    /// highlight / caption: how long (ms) to hold the overlay before clearing.
+    /// 0 or nil = a brief default; the runner does not block the plan on it.
+    public var holdMs: Int?
+    /// caption: where to place the banner — "top" / "bottom" (default) / "center".
+    public var position: String?
+    /// pace: milliseconds per character for subsequent `type` steps in demo mode.
+    public var typeMsPerChar: Int?
+    /// pace: milliseconds to pause after each subsequent step in demo mode.
+    public var stepDelayMs: Int?
     public init() {}
 }
