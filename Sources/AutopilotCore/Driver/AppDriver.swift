@@ -133,6 +133,18 @@ public protocol AppDriver {
     /// that cannot run subprocesses throw via the default implementation.
     func runProcess(command: String?, argv: [String]?, timeoutMs: Int,
                     workingDir: String?) throws -> ProcessResult
+
+    // Demo rendering (schema 1.2 `highlight` / `caption`, demo mode only)
+    /// Draw a highlight (glow/ring) over the resolved `element` for `holdMs`
+    /// milliseconds, then clear it. The DRIVER computes the element's screen frame
+    /// (core has only a center point, not the true bounds). Backends that cannot
+    /// draw an overlay do nothing (the step still passes — skip-don't-branch). Only
+    /// called in demo mode.
+    func showHighlight(_ element: any ElementHandle, holdMs: Int)
+    /// Show an on-screen caption/narration banner with `text` at `position`
+    /// ("top"/"bottom"/"center") for `holdMs` milliseconds. Backends that cannot
+    /// render do nothing. Only called in demo mode.
+    func showCaption(_ text: String, position: String, holdMs: Int)
 }
 
 // Default implementations so a backend that predates these primitives (or a test
@@ -144,4 +156,8 @@ public extension AppDriver {
                     workingDir: String?) throws -> ProcessResult {
         throw PlanError.decode("exec is not supported on this platform")
     }
+    // Demo overlays are best-effort: a backend that can't draw one renders nothing
+    // and the step still passes (skip-don't-branch). macOS overrides these.
+    func showHighlight(_ element: any ElementHandle, holdMs: Int) {}
+    func showCaption(_ text: String, position: String, holdMs: Int) {}
 }

@@ -14,7 +14,11 @@
   "properties": {
     "schemaVersion": {
       "type": "string",
-      "const": "1.1"
+      "enum": [
+        "1.1",
+        "1.2"
+      ],
+      "description": "Plan schema version. 1.2 adds the demo actions (highlight/caption/pace); 1.1 plans remain valid."
     },
     "name": {
       "type": "string"
@@ -156,8 +160,13 @@
             "position",
             "size",
             "marked",
-            "count"
-          ]
+            "count",
+            "clipboard",
+            "stdout",
+            "stderr",
+            "exitCode"
+          ],
+          "description": "value/title/enabled/focused/position/size/marked/count read the target element; count is target-scoped element count. clipboard reads the system pasteboard (target-less). stdout/stderr/exitCode read the result of the exec step this assert is attached to (target-less)."
         },
         "op": {
           "enum": [
@@ -212,6 +221,17 @@
             "type": "string"
           },
           "description": "NOT supported via synthetic events."
+        },
+        "command": {
+          "type": "string",
+          "description": "exec: a shell command line run via /bin/sh -c. Provide EITHER command OR argv, not both."
+        },
+        "argv": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "exec: program + arguments run directly (no shell). Provide EITHER argv OR command, not both."
         },
         "deltaX": {
           "type": "integer"
@@ -276,6 +296,29 @@
           "type": "number",
           "minimum": 0,
           "description": "Screen points of margin added around the AX element frame on all sides. Default 0 for the screenshot action; default 8 for captureTarget. Only applies to AX-resolved targets (vision-only matches are skipped)."
+        },
+        "holdMs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "highlight/caption (demo mode): milliseconds to hold the overlay before clearing. 0/omitted = a brief default; the run does not block the plan on it."
+        },
+        "position": {
+          "enum": [
+            "top",
+            "bottom",
+            "center"
+          ],
+          "description": "caption (demo mode): where to place the narration banner. Default bottom."
+        },
+        "typeMsPerChar": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "pace (demo mode): milliseconds per character for subsequent type steps, so typing is watchable. Ignored outside demo mode."
+        },
+        "stepDelayMs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "pace (demo mode): milliseconds to pause after each subsequent step. Ignored outside demo mode."
         }
       }
     },
@@ -311,7 +354,11 @@
             "waitFor",
             "screenshot",
             "assert",
-            "wait"
+            "wait",
+            "exec",
+            "highlight",
+            "caption",
+            "pace"
           ]
         },
         "level": {
@@ -357,10 +404,42 @@
                   "scroll",
                   "drag",
                   "waitFor",
-                  "assert"
+                  "highlight"
                 ]
               }
             }
+          },
+          "then": {
+            "required": [
+              "target"
+            ]
+          }
+        },
+        {
+          "comment": "An assert needs a target EXCEPT a clipboard assert, which reads the system pasteboard and is inherently target-less (mirrors PlanParser).",
+          "if": {
+            "allOf": [
+              {
+                "properties": {
+                  "action": {
+                    "const": "assert"
+                  }
+                }
+              },
+              {
+                "not": {
+                  "properties": {
+                    "assert": {
+                      "properties": {
+                        "property": {
+                          "const": "clipboard"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
           },
           "then": {
             "required": [
@@ -503,6 +582,57 @@
               "args": {
                 "required": [
                   "color"
+                ]
+              }
+            },
+            "required": [
+              "args"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "caption"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "args": {
+                "required": [
+                  "text"
+                ]
+              }
+            },
+            "required": [
+              "args"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "pace"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "args": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "typeMsPerChar"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "stepDelayMs"
+                    ]
+                  }
                 ]
               }
             },
