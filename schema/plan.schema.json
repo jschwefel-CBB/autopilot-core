@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://github.com/jschwefel-CBB/autopilot-macos/blob/main/schema/plan.schema.json",
+  "$id": "https://github.com/TestingAutoPilot/autopilot-macos/blob/main/schema/plan.schema.json",
   "title": "AutoPilot Test Plan",
   "description": "A declarative GUI test plan executed by AutoPilot. See docs/AUTHORING.md.",
   "type": "object",
