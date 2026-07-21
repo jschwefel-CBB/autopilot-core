@@ -25,14 +25,14 @@ a platform backend that conforms to `AppDriver`:
 
 | Repo | Platform | Backend |
 |---|---|---|
-| [`autopilot-macos`](https://github.com/TestingAutoPilot/autopilot-macos) | macOS | `MacOSDriver` — `AppDriver` over the Accessibility API, screen capture, vision matching |
-| [`autopilot-ios`](https://github.com/TestingAutoPilot/autopilot-ios) | iOS | XCUITest runner |
-| [`autopilot-android`](https://github.com/TestingAutoPilot/autopilot-android) | Android | UiAutomator2 runner |
+| [`autopilot-macos`](https://github.com/jschwefel-CBB/autopilot-macos) | macOS | `MacOSDriver` — `AppDriver` over the Accessibility API, screen capture, vision matching |
+| [`autopilot-ios`](https://github.com/jschwefel-CBB/autopilot-ios) | iOS | XCUITest runner |
+| [`autopilot-android`](https://github.com/jschwefel-CBB/autopilot-android) | Android | UiAutomator2 runner |
 
 ## Adding as a dependency
 
 ```swift
-.package(url: "https://github.com/TestingAutoPilot/autopilot-core", from: "2.0.0")
+.package(url: "https://github.com/jschwefel-CBB/autopilot-core", from: "2.0.0")
 ```
 
 ## Building
@@ -50,4 +50,4 @@ bash scripts/check-core-purity.sh   # fails if any platform framework leaks in
 
 ## License
 
-MIT
+Apache-2.0 — see [`LICENSE`](LICENSE).
